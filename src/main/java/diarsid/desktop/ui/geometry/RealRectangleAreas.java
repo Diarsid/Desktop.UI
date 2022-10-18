@@ -10,7 +10,11 @@ public class RealRectangleAreas extends RealRectangle {
     private final Map<Area, Rectangle> areasRectangles;
 
     public RealRectangleAreas(double x, double y, double width, double height, double sideAreaSize) {
-        super(x, y, width, height);
+        this(Anchor.anchor(x, y), Size.size(width, height), sideAreaSize);
+    }
+
+    public RealRectangleAreas(Anchor anchor, Size size, double sideAreaSize) {
+        super(anchor, size);
 
         this.areasRectangles = new HashMap<>();
 
