@@ -1,7 +1,5 @@
 package diarsid.desktop.ui.geometry;
 
-import java.util.Objects;
-
 import diarsid.support.objects.references.Possible;
 
 import static java.lang.String.format;
@@ -11,186 +9,9 @@ import static diarsid.support.objects.references.References.simplePossibleWith;
 
 public class RealMutableRectangle implements MutableRectangle {
 
-    static class RealMutableAnchor implements MutableAnchor {
-
-        RealMutableAnchor() {
-            this.present = false;
-        }
-        
-        RealMutableAnchor(Anchor anchor) {
-            this.present = true;
-            this.x = anchor.x();
-            this.y = anchor.y();
-        }
-        
-        RealMutableAnchor(double x, double y) {
-            this.present = true;
-            this.x = x;
-            this.y = y;
-        }
-
-        boolean present;
-        protected double x;
-        protected double y;
-
-        @Override
-        public double x() {
-            return this.x;
-        }
-
-        @Override
-        public double y() {
-            return this.y;
-        }
-
-        @Override
-        public boolean isValueAbsent() {
-            return ! this.present;
-        }
-
-        @Override
-        public boolean isValuePresent() {
-            return this.present;
-        }
-
-        @Override
-        public void set(double x, double y) {
-            this.present = true;
-            this.x = x;
-            this.y = y;
-        }
-
-        @Override
-        public Anchor asImmutable() {
-            return this;
-        }
-
-        @Override
-        public void setX(double x) {
-            this.present = true;
-            this.x = x;
-        }
-
-        @Override
-        public void setY(double y) {
-            this.present = true;
-            this.y = y;
-        }
-
-        @Override
-        public void set(Point point) {
-            this.set(point.x(), point.y());
-        }
-
-        @Override
-        public int hashCode() {
-            int hash = 7;
-            hash = 41 * hash + Objects.hashCode(this.x);
-            hash = 41 * hash + Objects.hashCode(this.y);
-            return hash;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if ( this == obj ) {
-                return true;
-            }
-            if ( obj == null ) {
-                return false;
-            }
-            if ( getClass() != obj.getClass() ) {
-                return false;
-            }
-            final RealMutableAnchor other = (RealMutableAnchor) obj;
-            if ( !Objects.equals(this.x, other.x) ) {
-                return false;
-            }
-            if ( !Objects.equals(this.y, other.y) ) {
-                return false;
-            }
-            return true;
-        }
-
-    }
-
-    static class RealMutableSize implements MutableSize {
-
-        RealMutableSize() {
-            this.present = false;
-        }
-        
-        RealMutableSize(Size size) {
-            this.present = true;
-            this.width = size.width();
-            this.height = size.height();
-        }
-        
-        RealMutableSize(double width, double height) {
-            this.present = true;
-            this.width = width;
-            this.height = height;
-        }
-
-        boolean present;
-        protected double width;
-        protected double height;
-
-        @Override
-        public double width() {
-            return this.width;
-        }
-
-        @Override
-        public double height() {
-            return this.height;
-        }
-
-        @Override
-        public boolean isValuePresent() {
-            return ! this.present;
-        }
-
-        @Override
-        public boolean isValueAbsent() {
-            return this.present;
-        }
-
-        @Override
-        public void set(double width, double height) {
-            this.present = true;
-            this.width = width;
-            this.height = height;
-        }
-
-        @Override
-        public void set(Size otherSize) {
-            this.present = true;
-            this.width = otherSize.width();
-            this.height = otherSize.height();
-        }
-
-        @Override
-        public Size asImmutable() {
-            return this;
-        }
-
-        @Override
-        public void setWidth(double width) {
-            this.present = true;
-            this.width = width;
-        }
-
-        @Override
-        public void setHeight(double height) {
-            this.present = true;
-            this.height = height;
-        }
-
-    }
-
     final RealMutableAnchor anchor;
     final RealMutableSize size;
-    final Possible<Size> minSize;
+    final Possible<MutableSize> minSize;
 
     RealMutableRectangle() {
         this.anchor = new RealMutableAnchor();
@@ -214,7 +35,7 @@ public class RealMutableRectangle implements MutableRectangle {
             Anchor givenAnchor, Size givenSize, Size minSize) {
         this.anchor = new RealMutableAnchor(givenAnchor);
         this.size = new RealMutableSize(givenSize);
-        this.minSize = simplePossibleWith(minSize);
+        this.minSize = simplePossibleWith(new RealMutableSize(minSize));
     }
     
     RealMutableRectangle(
@@ -250,8 +71,95 @@ public class RealMutableRectangle implements MutableRectangle {
     }
 
     @Override
-    public Possible<Size> minSize() {
+    public Possible<MutableSize> minSize() {
         return this.minSize;
+    }
+
+    @Override
+    public boolean fitIn(Rectangle rectangle) {
+        if ( rectangle.contains(this) ) {
+            return false;
+        }
+
+        if ( this.minSize().isPresent() ) {
+            this.fitRespectingMinSizeIn(rectangle);
+        } else {
+            this.fitAnywayIn(rectangle);
+        }
+        return true;
+    }
+
+//    private boolean fit(MutableRectangle fitted) {
+//        if ( this.contains(fitted) ) {
+//            return false;
+//        }
+//
+//        if ( fitted.minSize().isPresent() ) {
+//            this.fitRespectingMinSize(fitted);
+//        } else {
+//            this.fitAnyway(fitted);
+//        }
+//        return true;
+//    }
+
+    private void fitRespectingMinSizeIn(Rectangle rectangle) {
+        this.toMinSizeAbsolute();
+        Size fittedSize = this.size();
+
+        double anchorX = (rectangle.size().width() - fittedSize.width()) / 2;
+        double anchorY = (rectangle.size().height() - fittedSize.height()) / 2;
+
+        anchorX = Math.max(anchorX, this.anchor.x);
+        anchorY = Math.max(anchorY, this.anchor.y);
+
+        this.anchor.set(anchorX, anchorY);
+    }
+
+    private void notFinished(MutableRectangle fitted) {
+        if ( this.contains(fitted.anchor()) ) {
+
+        } else {
+
+        }
+
+
+
+        MutableSize fittedSize = fitted.size();
+        Size insetSize = this.size();
+
+        if ( fitted.isSmallerThanMinSize() ) {
+            fitted.toMinSizeAbsolute();
+        } else if ( fitted.isBiggerThanMinSize() ) {
+
+        } else {
+
+        }
+
+        if ( fittedSize.isOverallBiggerThan(insetSize) ) {
+            fitted.toMinSizeAbsolute();
+            fitted.anchor().set(this.anchor);
+        } else if ( fittedSize.isOverallSmallerThan(insetSize) ) {
+
+        }
+    }
+
+    private void fitAnywayIn(Rectangle rectangle) {
+        MutableSize fittedSize = this.size;
+
+        if( fittedSize.width() > rectangle.size().width() ) {
+            fittedSize.setWidth(rectangle.size().width());
+        }
+        if ( fittedSize.height() > rectangle.size().height() ) {
+            fittedSize.setHeight(rectangle.size().height());
+        }
+
+        double xDiff = rectangle.size().width() - fittedSize.width();
+        double yDiff = rectangle.size().height()- fittedSize.height();
+
+        double fitterAnchorX = rectangle.anchor().x() + (xDiff / 2);
+        double fitterAnchorY = rectangle.anchor().y() + (yDiff / 2);
+
+        this.anchor.set(fitterAnchorX, fitterAnchorY);
     }
 
     @Override
@@ -268,5 +176,4 @@ public class RealMutableRectangle implements MutableRectangle {
         return new Object[] {
             this.anchor.x, this.anchor.y, this.size.width, this.size.height};
     }
-        
 }

@@ -10,7 +10,7 @@ import static java.util.UUID.randomUUID;
 public class Watch {
 
     public final String name;
-    final Predicate<Point> predicate;
+    public final Predicate<Point> predicate;
     final BiConsumer<Point, Boolean> actionOnPredicateChange;
 
     public Watch(

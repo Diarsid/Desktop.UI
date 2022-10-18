@@ -10,6 +10,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import diarsid.support.concurrency.stateful.workers.AbstractStatefulPausableDestroyableWorker;
 import diarsid.support.concurrency.threads.ConstantThreadsNaming;
@@ -32,12 +35,14 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     private final Runnable watcherProbe;
     private final Runnable probeReceiving;
     private final long tick;
-    private final Object monitor;
+    private final Lock probe;
+    private final Lock allWatches;
+    private final Condition probeCondition;
+    private final Condition allWatchesCondition;
     private final List<Watch> watches;
     private final List<WatchThread> watchThreads;
     private final List<WatchThread> watchThreadsToAwake;
     private final List<WatchThread> watchThreadsAwakened;
-    private final Object allWatchesMonitor;
     private final AtomicBoolean isWorking;
     private final NamedThreadFactory watcherThreadFactory;
 
@@ -45,6 +50,7 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     private Thread receiverThread;
     private ScheduledFuture watcherThreadSchedule;
     private Point pointReceived;
+    private int probeConditionCount;
 
     public MouseWatcher(long tick, Watch... watches) {
         this(tick, asList(watches));
@@ -53,13 +59,17 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     public MouseWatcher(long tick, List<Watch> watches) {
         super();
         this.tick = tick;
-        this.monitor = new Object();
+        this.probe = new ReentrantLock(true);
+        this.allWatches = new ReentrantLock();
+        this.probeCondition = this.probe.newCondition();
+        this.allWatchesCondition = this.allWatches.newCondition();
         this.isWorking = new AtomicBoolean(false);
         this.watches = new ArrayList<>(watches);
         this.watchThreads = new ArrayList<>();
         this.watchThreadsToAwake = new ArrayList<>();
         this.watchThreadsAwakened = new ArrayList<>();
-        this.allWatchesMonitor = new Object();
+
+        this.probeConditionCount = 0;
 
         Set<String> names = new HashSet<>();
         List<String> duplicates = new ArrayList<>();
@@ -85,11 +95,17 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
 
         this.watcherProbe = () -> {
             Point point = MouseInfo.getPointerInfo().getLocation();
-            synchronized ( this.monitor ) {
+
+            this.probe.lock();
+            try {
                 if ( ! point.equals(this.pointReceived) ) {
                     this.pointReceived = point;
-                    this.monitor.notify();
+                    this.probeConditionCount++;
+                    this.probeCondition.signal();
                 }
+            }
+            finally {
+                this.probe.unlock();
             }
         };
 
@@ -98,9 +114,17 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
                 try {
                     Point point;
 
-                    synchronized ( this.monitor ) {
-                        this.monitor.wait();
+                    this.probe.lock();
+                    try {
+                        do {
+                            this.probeCondition.await();
+                        }
+                        while (this.probeConditionCount == 0);
+                        this.probeConditionCount = 0;
                         point = this.pointReceived;
+                    }
+                    finally {
+                        this.probe.unlock();
                     }
 
                     if ( ! this.isWorking.get() ) {
@@ -113,7 +137,8 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
 
                     WatchThread watchThread;
 
-                    synchronized ( this.allWatchesMonitor) {
+                    this.allWatches.lock();
+                    try {
                         for (int i = 0; i < this.watchThreads.size(); i++ ) {
                             watchThread = this.watchThreads.get(i);
                             if ( watchThread.watch.predicate.test(point) ) {
@@ -121,26 +146,40 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
                             }
                         }
                     }
+                    finally {
+                        this.allWatches.unlock();
+                    }
 
                     for (int i = 0; i < this.watchThreadsToAwake.size(); i++ ) {
                         watchThread = this.watchThreadsToAwake.get(i);
                         if ( this.watchThreadsAwakened.contains(watchThread) ) {
                             continue;
                         }
-                        synchronized ( watchThread.monitor ) {
+
+                        watchThread.watching.lock();
+                        try {
                             watchThread.point = point;
                             watchThread.predicateValue = true;
-                            watchThread.monitor.notify();
+                            watchThread.watchingConditionCount++;
+                            watchThread.watchingCondition.signal();
+                        }
+                        finally {
+                            watchThread.watching.unlock();
                         }
                     }
 
                     for (int i = 0; i < this.watchThreadsAwakened.size(); i++ ) {
                         watchThread = this.watchThreadsAwakened.get(i);
                         if ( ! this.watchThreadsToAwake.contains(watchThread) ) {
-                            synchronized ( watchThread.monitor ) {
+                            watchThread.watching.lock();
+                            try {
                                 watchThread.point = point;
                                 watchThread.predicateValue = false;
-                                watchThread.monitor.notify();
+                                watchThread.watchingConditionCount++;
+                                watchThread.watchingCondition.signal();
+                            }
+                            finally {
+                                watchThread.watching.unlock();
                             }
                         }
                     }
@@ -163,10 +202,14 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     protected boolean doSynchronizedStartWork() {
         this.isWorking.set(true);
 
-        synchronized ( this.allWatchesMonitor) {
-            for ( var reaction : this.watches) {
-                this.createAndStartReactionThreadFor(reaction);
+        this.allWatches.lock();
+        try {
+            for ( var watch : this.watches ) {
+                this.createAndStartThreadFor(watch);
             }
+        }
+        finally {
+            this.allWatches.unlock();
         }
 
         this.watcherThread = Executors.newSingleThreadScheduledExecutor(this.watcherThreadFactory);
@@ -178,7 +221,7 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
         return true;
     }
 
-    private void createAndStartReactionThreadFor(Watch watch) {
+    private void createAndStartThreadFor(Watch watch) {
         WatchThread watchThread = new WatchThread(watch, this.isWorking);
         this.watchThreads.add(watchThread);
         watchThread.start();
@@ -188,17 +231,26 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     protected boolean doSynchronizedPauseWork() {
         this.isWorking.set(false);
 
-        synchronized ( this.monitor ) {
-            this.monitor.notify();
+        this.probe.lock();
+        try {
+            this.probeConditionCount++;
+            this.probeCondition.signal();
+        }
+        finally {
+            this.probe.unlock();
         }
 
         this.watchThreadsAwakened.clear();
 
-        synchronized ( this.allWatchesMonitor) {
+        this.allWatches.lock();
+        try {
             for ( WatchThread watchThread : this.watchThreads) {
                 watchThread.signalToStop();
             }
             this.watchThreads.clear();
+        }
+        finally {
+            this.allWatches.unlock();
         }
 
         this.watcherThreadSchedule.cancel(false);
@@ -214,23 +266,30 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     }
 
     public boolean add(Watch watch) {
-        synchronized ( this.allWatchesMonitor) {
+        this.allWatches.lock();
+        try {
             if ( this.watches.contains(watch) ) {
                 return false;
             }
 
             this.watches.add(watch);
-            this.createAndStartReactionThreadFor(watch);
+            this.createAndStartThreadFor(watch);
         }
+        finally {
+            this.allWatches.unlock();
+        }
+
         return false;
     }
 
     public boolean remove(String name) {
         WatchThread watchThreadToRemove = null;
-        synchronized ( this.allWatchesMonitor) {
-            for ( var reactionThread : this.watchThreads) {
-                if ( reactionThread.watch.name.equals(name) ) {
-                    watchThreadToRemove = reactionThread;
+
+        this.allWatches.lock();
+        try {
+            for ( var watchThread : this.watchThreads) {
+                if ( watchThread.watch.name.equals(name) ) {
+                    watchThreadToRemove = watchThread;
                     break;
                 }
             }
@@ -244,6 +303,9 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
             else {
                 return false;
             }
+        }
+        finally {
+            this.allWatches.unlock();
         }
     }
 }

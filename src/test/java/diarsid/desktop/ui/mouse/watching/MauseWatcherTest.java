@@ -1,5 +1,7 @@
 package diarsid.desktop.ui.mouse.watching;
 
+import static java.lang.Thread.sleep;
+
 public class MauseWatcherTest {
 
     public static void main(String[] args) throws Exception {

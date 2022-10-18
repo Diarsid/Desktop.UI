@@ -2,6 +2,11 @@ package diarsid.desktop.ui.geometry;
 
 public interface MutableSize extends Size, Mutable {
 
+    static interface Listener {
+
+        void onChange(Size oldSize, Size newSize);
+    }
+
     void set(double width, double height);
 
     void set(Size otherSize);
@@ -12,8 +17,10 @@ public interface MutableSize extends Size, Mutable {
 
     Size asImmutable();
 
+    void addListener(Listener listener);
+
     static MutableSize mutableSize(double width, double height) {
-        return new RealMutableRectangle.RealMutableSize(width, height);
+        return new RealMutableSize(width, height);
     }
     
 }

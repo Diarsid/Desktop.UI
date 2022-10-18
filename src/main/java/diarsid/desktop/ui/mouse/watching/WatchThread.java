@@ -2,11 +2,14 @@ package diarsid.desktop.ui.mouse.watching;
 
 import java.awt.Point;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WatchThread extends Thread {
+class WatchThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(WatchThread.class);
 
@@ -16,17 +19,21 @@ public class WatchThread extends Thread {
 
     private final AtomicBoolean isWatcherWorking;
     final Watch watch;
-    final Object monitor;
+    final Lock watching;
+    final Condition watchingCondition;
+    int watchingConditionCount;
     boolean isWorking;
     Point point;
     boolean predicateValue;
 
-    public WatchThread(Watch watch, AtomicBoolean isWatcherWorking) {
+    WatchThread(Watch watch, AtomicBoolean isWatcherWorking) {
         super(THREAD_NAME_PREFIX + watch.name);
         this.watch = watch;
-        this.monitor = new Object();
+        this.watching = new ReentrantLock(true);
+        this.watchingCondition = this.watching.newCondition();
         this.isWorking = false;
         this.isWatcherWorking = isWatcherWorking;
+        this.watchingConditionCount = 0;
     }
 
     @Override
@@ -39,12 +46,22 @@ public class WatchThread extends Thread {
         boolean currentPredicateValue;
         while ( work ) {
             try {
-                synchronized ( this.monitor ) {
-                    this.monitor.wait();
+                this.watching.lock();
+                try {
+                    do {
+                        this.watchingCondition.await();
+                    }
+                    while ( this.watchingConditionCount == 0 );
+                    this.watchingConditionCount = 0;
                     currentPoint = this.point;
                     currentPredicateValue = this.predicateValue;
                 }
+                finally {
+                    this.watching.unlock();
+                }
+
                 work = this.isWorking && this.isWatcherWorking.get();
+
                 if ( ! work ) {
                     break;
                 }
@@ -72,9 +89,15 @@ public class WatchThread extends Thread {
     void signalToStop() {
         log.info("{} '{}' stopping", WatchThread.class.getSimpleName(), this.watch.name);
         this.isWorking = false;
-        synchronized ( this.monitor ) {
+
+        this.watching.lock();
+        try {
             this.point = null;
-            this.monitor.notify();
+            this.watchingConditionCount++;
+            this.watchingCondition.signal();
+        }
+        finally {
+            this.watching.unlock();
         }
     }
 }

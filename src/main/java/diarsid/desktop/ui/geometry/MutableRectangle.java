@@ -4,15 +4,24 @@ import diarsid.support.objects.references.Possible;
 
 public interface MutableRectangle extends Rectangle, Mutable {
 
+    static interface Listener {
+
+        void onChange(
+                Point oldPint, Point newPoint,
+                Size oldSize, Size newSize);
+    }
+
     @Override
     MutableAnchor anchor();
 
     @Override
     MutableSize size();
     
-    Possible<Size> minSize();
+    Possible<MutableSize> minSize();
     
     Rectangle asImmutable();
+
+    boolean fitIn(Rectangle rectangle);
     
     default boolean toMinSizeAbsolute() {
         if ( this.minSize().isPresent() ) {
@@ -61,6 +70,17 @@ public interface MutableRectangle extends Rectangle, Mutable {
         } else {
             return false;
         }
+    }
+
+    default void addListener(Listener listener) {
+        this.anchor().addListener((oldPoint, newPoint) -> {
+            Size size = this.size();
+            listener.onChange(oldPoint, newPoint, size, size);
+        });
+        this.size().addListener((oldSize, newSize) -> {
+            Point point = this.anchor();
+            listener.onChange(point, point, oldSize, newSize);
+        });
     }
     
 }

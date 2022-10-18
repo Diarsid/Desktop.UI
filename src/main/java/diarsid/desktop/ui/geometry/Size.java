@@ -17,7 +17,7 @@ public interface Size {
     }
 
     static Size size(double width, double height) {
-        return new RealMutableRectangle.RealMutableSize(width, height);
+        return new RealMutableSize(width, height);
     }
     
 }
