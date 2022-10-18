@@ -9,8 +9,8 @@ public class RealRectangleAreas extends RealRectangle {
 
     private final Map<Area, Rectangle> areasRectangles;
 
-    public RealRectangleAreas(double width, double height, double sideAreaSize) {
-        super(0, 0, width, height);
+    public RealRectangleAreas(double x, double y, double width, double height, double sideAreaSize) {
+        super(x, y, width, height);
 
         this.areasRectangles = new HashMap<>();
 
