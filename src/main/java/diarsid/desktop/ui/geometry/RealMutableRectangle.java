@@ -13,32 +13,32 @@ public class RealMutableRectangle implements MutableRectangle {
     final RealMutableSize size;
     final Possible<MutableSize> minSize;
 
-    RealMutableRectangle() {
+    public RealMutableRectangle() {
         this.anchor = new RealMutableAnchor();
         this.size = new RealMutableSize();
         this.minSize = simplePossibleButEmpty();
     }
-    
-    RealMutableRectangle(Anchor givenAnchor, Size givenSize) {
+
+    public RealMutableRectangle(Anchor givenAnchor, Size givenSize) {
         this.anchor = new RealMutableAnchor(givenAnchor);
         this.size = new RealMutableSize(givenSize);
         this.minSize = simplePossibleButEmpty();
     }
-    
-    RealMutableRectangle(double x, double y, double width, double height) {
+
+    public RealMutableRectangle(double x, double y, double width, double height) {
         this.anchor = new RealMutableAnchor(x, y);
         this.size = new RealMutableSize(width, height);
         this.minSize = simplePossibleButEmpty();
     }
-    
-    RealMutableRectangle(
+
+    public RealMutableRectangle(
             Anchor givenAnchor, Size givenSize, Size minSize) {
         this.anchor = new RealMutableAnchor(givenAnchor);
         this.size = new RealMutableSize(givenSize);
         this.minSize = simplePossibleWith(new RealMutableSize(minSize));
     }
-    
-    RealMutableRectangle(
+
+    public RealMutableRectangle(
             double x, double y, double width, double height, double minWidth, double minHeight) {
         this.anchor = new RealMutableAnchor(x, y);
         this.size = new RealMutableSize(width, height);

@@ -265,6 +265,10 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
         return true;
     }
 
+    public boolean add(WatchBearer watchBearer) {
+        return this.add(watchBearer.watch());
+    }
+
     public boolean add(Watch watch) {
         this.allWatches.lock();
         try {

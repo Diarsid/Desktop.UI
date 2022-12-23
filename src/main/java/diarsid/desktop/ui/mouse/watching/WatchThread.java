@@ -21,10 +21,10 @@ class WatchThread extends Thread {
     final Watch watch;
     final Lock watching;
     final Condition watchingCondition;
-    int watchingConditionCount;
-    boolean isWorking;
-    Point point;
-    boolean predicateValue;
+    volatile int watchingConditionCount;
+    volatile boolean isWorking;
+    volatile Point point;
+    volatile boolean predicateValue;
 
     WatchThread(Watch watch, AtomicBoolean isWatcherWorking) {
         super(THREAD_NAME_PREFIX + watch.name);
