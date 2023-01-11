@@ -1,13 +1,23 @@
 package diarsid.desktop.ui.geometry;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 
+import diarsid.support.exceptions.UnsupportedLogicException;
 import diarsid.support.objects.CommonEnum;
 
 import static java.util.Collections.emptyList;
 
+import static diarsid.desktop.ui.geometry.Rectangle.Corner.BOTTOM_LEFT;
+import static diarsid.desktop.ui.geometry.Rectangle.Corner.BOTTOM_RIGHT;
+import static diarsid.desktop.ui.geometry.Rectangle.Corner.TOP_LEFT;
+import static diarsid.desktop.ui.geometry.Rectangle.Corner.TOP_RIGHT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_BOTTOM;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_LEFT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_RIGHT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_TOP;
 import static diarsid.desktop.ui.geometry.Rectangle.Side.BOTTOM;
 import static diarsid.desktop.ui.geometry.Rectangle.Side.LEFT;
 import static diarsid.desktop.ui.geometry.Rectangle.Side.Orientation.HORIZONTAL;
@@ -20,7 +30,15 @@ public interface Rectangle {
 
     public interface Area {
 
-        public static Area CENTRAL = new Area() {
+        public interface Inside extends Area {
+
+        }
+
+        public interface Outside extends Area {
+
+        }
+
+        public static Area.Inside CENTRAL = new Area.Inside() {
 
             @Override
             public String name() {
@@ -48,14 +66,24 @@ public interface Rectangle {
         }
     }
 
-    public static enum Side implements Area, CommonEnum<Side> {
+    public static enum Side implements Area.Inside, CommonEnum<Side> {
 
         TOP(HORIZONTAL),
         LEFT(VERTICAL),
         RIGHT(VERTICAL),
         BOTTOM(HORIZONTAL);
 
+        private static final EnumMap<Side, Side> NEXT_SIDE_BY_SIDE = new EnumMap<Side, Side>(Side.class);
+
+        static {
+            NEXT_SIDE_BY_SIDE.put(TOP, RIGHT);
+            NEXT_SIDE_BY_SIDE.put(RIGHT, BOTTOM);
+            NEXT_SIDE_BY_SIDE.put(BOTTOM, LEFT);
+            NEXT_SIDE_BY_SIDE.put(LEFT, TOP);
+        }
+
         public final Orientation orientation;
+
 
         private Side(Orientation orientation) {
             this.orientation = orientation;
@@ -65,9 +93,13 @@ public interface Rectangle {
             VERTICAL,
             HORIZONTAL
         }
+
+        public Side nextByClock() {
+            return NEXT_SIDE_BY_SIDE.get(this);
+        }
     }
 
-    public static enum Corner implements Area, CommonEnum<Corner> {
+    public static enum Corner implements Area.Inside, CommonEnum<Corner> {
 
         TOP_LEFT(TOP, LEFT),        TOP_RIGHT(TOP, RIGHT),
 
@@ -81,6 +113,38 @@ public interface Rectangle {
             this.sideBefore = sideBefore;
             this.sideAfter = sideAfter;
             this.sides = List.of(this.sideBefore, this.sideAfter);
+        }
+    }
+
+    public static enum OutsideToSide implements Area.Outside, CommonEnum<OutsideToSide> {
+
+        FROM_OUTSIDE_TO_TOP(TOP),
+        FROM_OUTSIDE_TO_LEFT(LEFT),
+        FROM_OUTSIDE_TO_RIGHT(RIGHT),
+        FROM_OUTSIDE_TO_BOTTOM(BOTTOM);
+
+        public final Side side;
+
+        OutsideToSide(Side side) {
+            this.side = side;
+        }
+    }
+
+    public static enum OutsideToCorner implements Area.Outside, CommonEnum<OutsideToCorner> {
+
+        FROM_OUTSIDE_TO_TOP_LEFT(TOP_LEFT, FROM_OUTSIDE_TO_TOP, FROM_OUTSIDE_TO_LEFT),
+        FROM_OUTSIDE_TO_TOP_RIGHT(TOP_RIGHT, FROM_OUTSIDE_TO_TOP, FROM_OUTSIDE_TO_RIGHT),
+        FROM_OUTSIDE_TO_BOTTOM_LEFT(BOTTOM_LEFT, FROM_OUTSIDE_TO_BOTTOM, FROM_OUTSIDE_TO_LEFT),
+        FROM_OUTSIDE_TO_BOTTOM_RIGHT(BOTTOM_RIGHT, FROM_OUTSIDE_TO_BOTTOM, FROM_OUTSIDE_TO_RIGHT);
+
+        public final Corner corner;
+        public final OutsideToSide outsideToSideBefore;
+        public final OutsideToSide outsideToSideAfter;
+
+        OutsideToCorner(Corner corner, OutsideToSide outsideToSideBefore, OutsideToSide outsideToSideAfter) {
+            this.corner = corner;
+            this.outsideToSideBefore = outsideToSideBefore;
+            this.outsideToSideAfter = outsideToSideAfter;
         }
     }
 
@@ -158,6 +222,90 @@ public interface Rectangle {
         }
 
         return EnumSet.copyOf(collidedSides);
+    }
+
+    default Side closerSideToOuterPointOf(OutsideToCorner outsideToCorner, Point point) {
+        return this.closerSideToOuterPointOf(outsideToCorner, point.x(), point.y());
+    }
+
+    default Side closerSideToOuterPointOf(OutsideToCorner outsideToCorner, double x, double y) {
+        double width = this.width();
+        double height = this.height();
+
+        double dX;
+        double dY;
+        Side closerSide;
+
+        switch ( outsideToCorner ) {
+            case FROM_OUTSIDE_TO_TOP_LEFT:
+                if ( x > 0 && y > 0) {
+                    throw new UnsupportedLogicException();
+                }
+
+                dX = 0 - x;
+                dY = 0 - y;
+
+                if ( dX > dY ) {
+                    closerSide = LEFT;
+                }
+                else {
+                    closerSide = TOP;
+                }
+
+                break;
+            case FROM_OUTSIDE_TO_TOP_RIGHT:
+                if ( x < width && y > 0 ) {
+                    throw new UnsupportedLogicException();
+                }
+
+                dX = x - width;
+                dY = 0 - y;
+
+                if ( dX > dY ) {
+                    closerSide = RIGHT;
+                }
+                else {
+                    closerSide = TOP;
+                }
+
+                break;
+            case FROM_OUTSIDE_TO_BOTTOM_RIGHT:
+                if ( x < width && y < height ) {
+                    throw new UnsupportedLogicException();
+                }
+
+                dX = x - width;
+                dY = y - height;
+
+                if ( dX > dY ) {
+                    closerSide = RIGHT;
+                }
+                else {
+                    closerSide = BOTTOM;
+                }
+
+                break;
+            case FROM_OUTSIDE_TO_BOTTOM_LEFT:
+                if ( x > 0 && y < this.height() ) {
+                    throw new UnsupportedLogicException();
+                }
+
+                dX = 0 - x;
+                dY = y - height;
+
+                if ( dX > dY ) {
+                    closerSide = LEFT;
+                }
+                else {
+                    closerSide = BOTTOM;
+                }
+
+                break;
+            default:
+                throw outsideToCorner.unsupported();
+        }
+
+        return closerSide;
     }
 
     default PointToCorner pointToCorner(Corner corner, Point point) {

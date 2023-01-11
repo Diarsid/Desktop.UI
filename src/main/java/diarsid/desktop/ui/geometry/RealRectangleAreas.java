@@ -4,6 +4,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static diarsid.desktop.ui.geometry.Rectangle.Area.CENTRAL;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToCorner.FROM_OUTSIDE_TO_BOTTOM_LEFT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToCorner.FROM_OUTSIDE_TO_BOTTOM_RIGHT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToCorner.FROM_OUTSIDE_TO_TOP_LEFT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToCorner.FROM_OUTSIDE_TO_TOP_RIGHT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_BOTTOM;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_LEFT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_RIGHT;
+import static diarsid.desktop.ui.geometry.Rectangle.OutsideToSide.FROM_OUTSIDE_TO_TOP;
 
 public class RealRectangleAreas extends RealRectangle {
 
@@ -73,6 +81,57 @@ public class RealRectangleAreas extends RealRectangle {
                 new RealRectangle(
                         sideAreaSize, sideAreaSize,
                         this.width() - x2sideAreaSize, this.height() - x2sideAreaSize));
+
+        double max = Double.MAX_VALUE;
+        double min = -max;
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_LEFT,
+                new RealRectangle(
+                        min, 0,
+                        max, this.height()));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_TOP_LEFT,
+                new RealRectangle(
+                        min, min,
+                        max, max));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_TOP,
+                new RealRectangle(
+                        0, min,
+                        this.width(), max));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_TOP_RIGHT,
+                new RealRectangle(
+                        this.width(), min,
+                        max, max));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_RIGHT,
+                new RealRectangle(
+                        this.width(), 0,
+                        max, this.height()));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_BOTTOM_RIGHT,
+                new RealRectangle(
+                        this.width(), this.height(),
+                        max, max));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_BOTTOM,
+                new RealRectangle(
+                        0, this.height(),
+                        this.width(), max));
+
+        this.areasRectangles.put(
+                FROM_OUTSIDE_TO_BOTTOM_LEFT,
+                new RealRectangle(
+                        0, this.height(),
+                        max, max));
     }
 
     public boolean isInCentralArea(Point point) {
@@ -149,6 +208,16 @@ public class RealRectangleAreas extends RealRectangle {
             return CENTRAL;
         }
 
+        for ( Area area : this.areasRectangles.keySet() ) {
+            if ( this.isIntersecting(area, point) ) {
+                return area;
+            }
+        }
+
+        throw new IllegalStateException();
+    }
+
+    public Area areaOf(Point point) {
         for ( Area area : this.areasRectangles.keySet() ) {
             if ( this.isIntersecting(area, point) ) {
                 return area;
