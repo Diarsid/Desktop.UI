@@ -1,5 +1,6 @@
 package diarsid.desktop.ui.geometry;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -26,9 +27,9 @@ import static diarsid.desktop.ui.geometry.Rectangle.Side.RIGHT;
 import static diarsid.desktop.ui.geometry.Rectangle.Side.TOP;
 import static diarsid.desktop.ui.geometry.RectangleSidesAndCorners.NEIGHBOURS_SIDES_BY_SIDE;
 
-public interface Rectangle {
+public interface Rectangle extends Serializable {
 
-    public interface Area {
+    public interface Area extends Serializable {
 
         public interface Inside extends Area {
 
@@ -66,7 +67,7 @@ public interface Rectangle {
         }
     }
 
-    public static enum Side implements Area.Inside, CommonEnum<Side> {
+    public static enum Side implements Area.Inside, CommonEnum<Side>, Serializable {
 
         TOP(HORIZONTAL),
         LEFT(VERTICAL),
@@ -89,7 +90,7 @@ public interface Rectangle {
             this.orientation = orientation;
         }
 
-        public enum Orientation implements CommonEnum<Orientation> {
+        public enum Orientation implements CommonEnum<Orientation>, Serializable {
             VERTICAL,
             HORIZONTAL
         }
@@ -99,7 +100,7 @@ public interface Rectangle {
         }
     }
 
-    public static enum Corner implements Area.Inside, CommonEnum<Corner> {
+    public static enum Corner implements Area.Inside, CommonEnum<Corner>, Serializable {
 
         TOP_LEFT(TOP, LEFT),        TOP_RIGHT(TOP, RIGHT),
 
@@ -116,7 +117,7 @@ public interface Rectangle {
         }
     }
 
-    public static enum OutsideToSide implements Area.Outside, CommonEnum<OutsideToSide> {
+    public static enum OutsideToSide implements Area.Outside, CommonEnum<OutsideToSide>, Serializable {
 
         FROM_OUTSIDE_TO_TOP(TOP),
         FROM_OUTSIDE_TO_LEFT(LEFT),
@@ -130,7 +131,7 @@ public interface Rectangle {
         }
     }
 
-    public static enum OutsideToCorner implements Area.Outside, CommonEnum<OutsideToCorner> {
+    public static enum OutsideToCorner implements Area.Outside, CommonEnum<OutsideToCorner>, Serializable {
 
         FROM_OUTSIDE_TO_TOP_LEFT(TOP_LEFT, FROM_OUTSIDE_TO_TOP, FROM_OUTSIDE_TO_LEFT),
         FROM_OUTSIDE_TO_TOP_RIGHT(TOP_RIGHT, FROM_OUTSIDE_TO_TOP, FROM_OUTSIDE_TO_RIGHT),

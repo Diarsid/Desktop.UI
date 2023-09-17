@@ -1,6 +1,8 @@
 package diarsid.desktop.ui.geometry;
 
-public interface Size {
+import java.io.Serializable;
+
+public interface Size extends Serializable {
 
     double width();
 

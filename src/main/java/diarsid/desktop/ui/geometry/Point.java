@@ -1,6 +1,8 @@
 package diarsid.desktop.ui.geometry;
 
-public interface Point {
+import java.io.Serializable;
+
+public interface Point extends Serializable {
 
     double x();
 
