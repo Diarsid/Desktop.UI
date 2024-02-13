@@ -21,10 +21,10 @@ class WatchThread extends Thread {
     final Watch watch;
     final Lock watching;
     final Condition watchingCondition;
-    volatile int watchingConditionCount;
+    volatile boolean watchingConditionSignalled;
     volatile boolean isWorking;
-    volatile Point point;
-    volatile boolean predicateValue;
+    private volatile Point point;
+    private volatile boolean predicateValue;
 
     WatchThread(Watch watch, AtomicBoolean isWatcherWorking) {
         super(THREAD_NAME_PREFIX + watch.name);
@@ -33,7 +33,7 @@ class WatchThread extends Thread {
         this.watchingCondition = this.watching.newCondition();
         this.isWorking = false;
         this.isWatcherWorking = isWatcherWorking;
-        this.watchingConditionCount = 0;
+        this.watchingConditionSignalled = false;
     }
 
     @Override
@@ -51,8 +51,8 @@ class WatchThread extends Thread {
                     do {
                         this.watchingCondition.await();
                     }
-                    while ( this.watchingConditionCount == 0 );
-                    this.watchingConditionCount = 0;
+                    while ( ! this.watchingConditionSignalled );
+                    this.watchingConditionSignalled = false;
                     currentPoint = this.point;
                     currentPredicateValue = this.predicateValue;
                 }
@@ -93,7 +93,28 @@ class WatchThread extends Thread {
         this.watching.lock();
         try {
             this.point = null;
-            this.watchingConditionCount++;
+            this.watchingConditionSignalled = true;
+            this.watchingCondition.signal();
+        }
+        finally {
+            this.watching.unlock();
+        }
+    }
+
+    void awakeWhenPredicateIsTrueFor(Point point) {
+        this.awakeFor(true, point);
+    }
+
+    void awakeWhenPredicateIsFalseFor(Point point) {
+        this.awakeFor(false, point);
+    }
+
+    private void awakeFor(boolean pointPredicateValue, Point point) {
+        this.watching.lock();
+        try {
+            this.point = point;
+            this.predicateValue = pointPredicateValue;
+            this.watchingConditionSignalled = true;
             this.watchingCondition.signal();
         }
         finally {

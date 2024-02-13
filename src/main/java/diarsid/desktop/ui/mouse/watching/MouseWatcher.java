@@ -14,12 +14,13 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import diarsid.support.concurrency.stateful.workers.AbstractStatefulPausableDestroyableWorker;
 import diarsid.support.concurrency.threads.ConstantThreadsNaming;
 import diarsid.support.concurrency.threads.NamedThreadFactory;
 import diarsid.support.concurrency.threads.ThreadsNaming;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -38,7 +39,6 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     private final Lock probe;
     private final Lock allWatches;
     private final Condition probeCondition;
-    private final Condition allWatchesCondition;
     private final List<Watch> watches;
     private final List<WatchThread> watchThreads;
     private final List<WatchThread> watchThreadsToAwake;
@@ -48,9 +48,9 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
 
     private ScheduledExecutorService watcherThread;
     private Thread receiverThread;
-    private ScheduledFuture watcherThreadSchedule;
-    private Point pointReceived;
-    private int probeConditionCount;
+    private ScheduledFuture<?> watcherThreadSchedule;
+    private volatile Point pointReceived;
+    private volatile boolean probeConditionSignalled;
 
     public MouseWatcher(long tick, Watch... watches) {
         this(tick, asList(watches));
@@ -62,14 +62,13 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
         this.probe = new ReentrantLock(true);
         this.allWatches = new ReentrantLock();
         this.probeCondition = this.probe.newCondition();
-        this.allWatchesCondition = this.allWatches.newCondition();
         this.isWorking = new AtomicBoolean(false);
         this.watches = new ArrayList<>(watches);
         this.watchThreads = new ArrayList<>();
         this.watchThreadsToAwake = new ArrayList<>();
         this.watchThreadsAwakened = new ArrayList<>();
 
-        this.probeConditionCount = 0;
+        this.probeConditionSignalled = false;
 
         Set<String> names = new HashSet<>();
         List<String> duplicates = new ArrayList<>();
@@ -100,7 +99,7 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
             try {
                 if ( ! point.equals(this.pointReceived) ) {
                     this.pointReceived = point;
-                    this.probeConditionCount++;
+                    this.probeConditionSignalled = true;
                     this.probeCondition.signal();
                 }
             }
@@ -119,8 +118,8 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
                         do {
                             this.probeCondition.await();
                         }
-                        while (this.probeConditionCount == 0);
-                        this.probeConditionCount = 0;
+                        while ( ! this.probeConditionSignalled );
+                        this.probeConditionSignalled = false;
                         point = this.pointReceived;
                     }
                     finally {
@@ -156,31 +155,13 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
                             continue;
                         }
 
-                        watchThread.watching.lock();
-                        try {
-                            watchThread.point = point;
-                            watchThread.predicateValue = true;
-                            watchThread.watchingConditionCount++;
-                            watchThread.watchingCondition.signal();
-                        }
-                        finally {
-                            watchThread.watching.unlock();
-                        }
+                        watchThread.awakeWhenPredicateIsTrueFor(point);
                     }
 
                     for (int i = 0; i < this.watchThreadsAwakened.size(); i++ ) {
                         watchThread = this.watchThreadsAwakened.get(i);
                         if ( ! this.watchThreadsToAwake.contains(watchThread) ) {
-                            watchThread.watching.lock();
-                            try {
-                                watchThread.point = point;
-                                watchThread.predicateValue = false;
-                                watchThread.watchingConditionCount++;
-                                watchThread.watchingCondition.signal();
-                            }
-                            finally {
-                                watchThread.watching.unlock();
-                            }
+                            watchThread.awakeWhenPredicateIsFalseFor(point);
                         }
                     }
                 }
@@ -233,7 +214,7 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
 
         this.probe.lock();
         try {
-            this.probeConditionCount++;
+            this.probeConditionSignalled = true;
             this.probeCondition.signal();
         }
         finally {
@@ -261,7 +242,7 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
 
     @Override
     protected boolean doSynchronizedDestroy() {
-        shutdownAndWait(this.watcherThread);
+        this.doSynchronizedPauseWork();
         return true;
     }
 
@@ -270,46 +251,51 @@ public class MouseWatcher extends AbstractStatefulPausableDestroyableWorker {
     }
 
     public boolean add(Watch watch) {
-        this.allWatches.lock();
-        try {
-            if ( this.watches.contains(watch) ) {
-                return false;
+        return super.doSynchronizedReturnChange(() -> {this.allWatches.lock();
+            try {
+                if ( this.watches.contains(watch) ) {
+                    return false;
+                }
+
+                this.watches.add(watch);
+                if ( this.isWorking() ) {
+                    this.createAndStartThreadFor(watch);
+                }
+            }
+            finally {
+                this.allWatches.unlock();
             }
 
-            this.watches.add(watch);
-            this.createAndStartThreadFor(watch);
-        }
-        finally {
-            this.allWatches.unlock();
-        }
-
-        return false;
+            return true;
+        });
     }
 
     public boolean remove(String name) {
-        WatchThread watchThreadToRemove = null;
+        return super.doSynchronizedReturnChange(() -> {
+            WatchThread watchThreadToRemove = null;
 
-        this.allWatches.lock();
-        try {
-            for ( var watchThread : this.watchThreads) {
-                if ( watchThread.watch.name.equals(name) ) {
-                    watchThreadToRemove = watchThread;
-                    break;
+            this.allWatches.lock();
+            try {
+                for ( var watchThread : this.watchThreads) {
+                    if ( watchThread.watch.name.equals(name) ) {
+                        watchThreadToRemove = watchThread;
+                        break;
+                    }
+                }
+
+                if ( watchThreadToRemove != null ) {
+                    watchThreadToRemove.signalToStop();
+                    this.watches.remove(watchThreadToRemove.watch);
+                    this.watchThreads.remove(watchThreadToRemove);
+                    return true;
+                }
+                else {
+                    return false;
                 }
             }
-
-            if ( watchThreadToRemove != null ) {
-                watchThreadToRemove.signalToStop();
-                this.watches.remove(watchThreadToRemove.watch);
-                this.watchThreads.remove(watchThreadToRemove);
-                return true;
+            finally {
+                this.allWatches.unlock();
             }
-            else {
-                return false;
-            }
-        }
-        finally {
-            this.allWatches.unlock();
-        }
+        });
     }
 }

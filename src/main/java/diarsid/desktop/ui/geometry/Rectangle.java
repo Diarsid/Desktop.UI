@@ -341,6 +341,76 @@ public interface Rectangle extends Serializable {
 
         return new PointToCorner(corner, x, y, dX, dY);
     }
+
+    default PointToSide pointToSideInside(Point point) {
+        if ( ! this.contains(point) ) {
+            throw new IllegalArgumentException();
+        }
+
+        double x = this.anchor().x();
+        double y = this.anchor().y();
+
+        double pX = point.x();
+        double pY = point.y();
+
+        double width = this.size().width();
+        double height = this.size().height();
+
+        double distanceToTop = pY - y;
+        double distanceToRight = (x + width) - pX;
+        double distanceToBottom = (y + height) - pY;
+        double distanceToLeft = pX - x;
+
+        Side side;
+        double distance;
+
+        if ( distanceToTop <= distanceToBottom ) {
+            if ( distanceToLeft <= distanceToRight ) {
+                if ( distanceToLeft <= distanceToTop ) {
+                    distance = distanceToLeft;
+                    side = LEFT;
+                }
+                else {
+                    distance = distanceToTop;
+                    side = TOP;
+                }
+            }
+            else {
+                if ( distanceToTop <= distanceToRight ) {
+                    distance = distanceToTop;
+                    side = TOP;
+                }
+                else {
+                    distance = distanceToRight;
+                    side = RIGHT;
+                }
+            }
+        }
+        else {
+            if ( distanceToLeft <= distanceToRight ) {
+                if ( distanceToLeft <= distanceToBottom ) {
+                    distance = distanceToLeft;
+                    side = LEFT;
+                }
+                else {
+                    distance = distanceToBottom;
+                    side = BOTTOM;
+                }
+            }
+            else {
+                if ( distanceToRight <= distanceToBottom ) {
+                    distance = distanceToRight;
+                    side = RIGHT;
+                }
+                else {
+                    distance = distanceToBottom;
+                    side = BOTTOM;
+                }
+            }
+        }
+
+        return new PointToSide(point, distance, side);
+    }
     
     default boolean anchorBiggerThanIn(Rectangle other) {
         return ! this.anchorLesserThanIn(other);

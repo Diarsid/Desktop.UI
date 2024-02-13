@@ -6,24 +6,8 @@ import java.util.Objects;
 
 class RealMutableAnchor implements MutableAnchor {
 
-    static class PointImpl implements Point {
-
-        double x;
-        double y;
-
-        @Override
-        public double x() {
-            return this.x;
-        }
-
-        @Override
-        public double y() {
-            return this.y;
-        }
-    }
-
     private final List<MutablePoint.Listener> listeners;
-    private final PointImpl prevPoint;
+    private final RealPoint prevPoint;
     protected boolean present;
     protected double x;
     protected double y;
@@ -31,13 +15,13 @@ class RealMutableAnchor implements MutableAnchor {
     RealMutableAnchor() {
         this.present = false;
         this.listeners = new ArrayList<>();
-        this.prevPoint = new PointImpl();
+        this.prevPoint = new RealPoint();
     }
 
     RealMutableAnchor(Anchor anchor) {
         this.present = true;
         this.listeners = new ArrayList<>();
-        this.prevPoint = new PointImpl();
+        this.prevPoint = new RealPoint();
         this.x = anchor.x();
         this.y = anchor.y();
     }
@@ -45,7 +29,7 @@ class RealMutableAnchor implements MutableAnchor {
     RealMutableAnchor(double x, double y) {
         this.present = true;
         this.listeners = new ArrayList<>();
-        this.prevPoint = new PointImpl();
+        this.prevPoint = new RealPoint();
         this.x = x;
         this.y = y;
     }

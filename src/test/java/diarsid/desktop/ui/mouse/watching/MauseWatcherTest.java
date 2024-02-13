@@ -41,18 +41,19 @@ public class MauseWatcherTest {
                     }
                 });
 
-        MouseWatcher watcher = new MouseWatcher(10, x, y, a);
+        MouseWatcher watcher = new MouseWatcher(10);
+        watcher.add(x);
         watcher.startWork();
 
-//        sleep(6_000);
+        sleep(6_000);
 //        System.out.println("remove y");
 //        watcher.remove("y");
 //        System.out.println("removed y");
-//        sleep(6_000);
+        sleep(6_000);
 //        System.out.println("add y ");
 //        watcher.add(y);
 //        System.out.println("added y");
-//        sleep(6_000);
+        sleep(6_000);
 //        System.out.println("destroy");
 //        watcher.destroy();
 //        System.out.println("destroyed");
